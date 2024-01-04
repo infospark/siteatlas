@@ -1,13 +1,9 @@
 SiteAtlas
 ========
 
-A Python Library for Website Structure Mapping
+A Python Library for Website URL listing.
 
-Creates a map of website pages and their relationships.
-Starts with seed URLs and follows links to explore the website.
-Focuses on a single domain by default, but allows customization.
-Easy to install and use, ideal for website analysis and navigation. 
-
+Given a Seed URL maps a website's URLs, prioritising thoroughness and accuracy over rapid execution.
 
 Installation Guide
 -----------------
@@ -20,7 +16,7 @@ TODO - write some usage examples here.
 Contributing
 ------------
 
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
 Licence
 -------
