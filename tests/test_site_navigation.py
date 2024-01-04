@@ -58,7 +58,7 @@ def test_links_from_page_allow_extra_domain() -> None:
     assert 'https://www.google.com/search' in page_map.urls
     assert len(page_map.ignored_urls) == 0
 
-
+@pytest.mark.integration("Requires Selenium")
 def test_site_navigation_file_url(driver: WebDriver) -> None:
     # Given a 'seed' url for a website
     index_url = f'file://{os.path.join(TEST_RESOURCES, "index.html")}'
