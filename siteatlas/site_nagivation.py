@@ -6,7 +6,7 @@ from typing import Optional
 from bs4 import BeautifulSoup
 from selenium.webdriver.chrome.webdriver import WebDriver
 
-from siteatlas.url_functions import get_domain, get_absolute_url
+from siteatlas.url_functions import get_fully_qualified_domain_name, get_absolute_url
 
 
 @dataclass
@@ -25,7 +25,7 @@ class SiteMap:
         return SiteMap(urls_diff, ignored_urls_diff)
 
     def get_ignored_url_domains(self) -> set[str]:
-        return {get_domain(url) for url in self.ignored_urls}
+        return {get_fully_qualified_domain_name(url) for url in self.ignored_urls}
 
 
 def get_page_map(html: str,
@@ -42,7 +42,7 @@ def get_page_map(html: str,
     for url in urls:
         absolute_urls.add(get_absolute_url(base_url, url))
 
-    urls = {url for url in absolute_urls if get_domain(url) in allowed_domains}
+    urls = {url for url in absolute_urls if get_fully_qualified_domain_name(url) in allowed_domains}
     ignored_urls = absolute_urls.difference(urls)
 
     logging.info(f"Found {len(urls)} allowed urls and {len(ignored_urls)} disallowed urls in {base_url}")
