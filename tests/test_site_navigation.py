@@ -6,7 +6,7 @@ from _pytest.fixtures import fixture
 from selenium import webdriver
 from selenium.webdriver.chrome.webdriver import WebDriver
 
-from siteatlas.site_nagivation import get_page_map, get_site_map, SiteMap
+from siteatlas.site_nagivation import get_page_map, SiteMap, get_site_map
 
 CURRENT_LOCATION = os.path.dirname(os.path.realpath(__file__))
 TEST_RESOURCES = os.path.join(CURRENT_LOCATION, 'resources/sample_basic_website')
@@ -57,6 +57,7 @@ def test_links_from_page_allow_extra_domain() -> None:
     assert f'file://{TEST_RESOURCES}/contact.html' in page_map.urls
     assert 'https://www.google.com/search' in page_map.urls
     assert len(page_map.ignored_urls) == 0
+
 
 @pytest.mark.integration("Requires Selenium")
 def test_site_navigation_file_url(driver: WebDriver) -> None:

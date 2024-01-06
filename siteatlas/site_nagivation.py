@@ -31,6 +31,7 @@ class SiteMap:
 def get_page_map(html: str,
                  base_url: str,
                  allowed_domains: set[str]) -> SiteMap:
+    """Get a links from a single page."""
     # Create a BeautifulSoup object from the html
     page_soup = BeautifulSoup(html, 'html.parser')
     # Find all the links in the html
@@ -54,22 +55,41 @@ def get_site_map(url: str,
                  driver: WebDriver,
                  site_map: SiteMap = SiteMap(),
                  current_depth: int = 0,
-                 max_depth: Optional[int] = None,
+                 max_depth: int = 10,
                  allowed_domains: Optional[set[str]] = None,
-                 default_wait_in_seconds: float = 0.1) -> SiteMap:
+                 wait_in_seconds: float = 0.1) -> SiteMap:
+    """Map a whole site."""
+    # If allowed_domains does not include the current domains then add it
+    if not allowed_domains:
+        allowed_domains = {get_fully_qualified_domain_name(url)}
+    elif get_fully_qualified_domain_name(url) not in allowed_domains:
+        allowed_domains.add(get_fully_qualified_domain_name(url))
+
+
+    return get_site_map_recursive(url=url,
+                                  driver=driver,
+                                  site_map=site_map,
+                                  allowed_domains=allowed_domains,
+                                  current_depth=current_depth,
+                                  max_depth=max_depth,
+                                  wait_in_seconds=wait_in_seconds)
+
+
+def get_site_map_recursive(url: str,
+                           driver: WebDriver,
+                           site_map: SiteMap,
+                           allowed_domains: set[str],
+                           current_depth: int,
+                           max_depth: int,
+                           wait_in_seconds: float) -> SiteMap:
+    """Map a whole site."""
     logging.info(f"Starting get_site_map map for {url} at depth {current_depth}")
 
     if max_depth and current_depth >= max_depth:
         return site_map
 
-    if not site_map:
-        site_map = SiteMap()
-
-    if not allowed_domains:
-        allowed_domains = set()
-
     driver.get(url)
-    time.sleep(default_wait_in_seconds)
+    time.sleep(wait_in_seconds)
     html = driver.page_source
 
     # Add self to all
@@ -86,12 +106,13 @@ def get_site_map(url: str,
 
     # Recursively call get_site_map for each new link
     for unseen_url in unseen_site_map.urls:
-        unseen_site_map = get_site_map(url=unseen_url,
-                                       driver=driver,
-                                       site_map=site_map,
-                                       current_depth=current_depth + 1,
-                                       max_depth=max_depth,
-                                       allowed_domains=allowed_domains)
+        unseen_site_map = get_site_map_recursive(url=unseen_url,
+                                                 driver=driver,
+                                                 site_map=site_map,
+                                                 current_depth=current_depth + 1,
+                                                 max_depth=max_depth,
+                                                 allowed_domains=allowed_domains,
+                                                 wait_in_seconds=wait_in_seconds)
         site_map = site_map.combine_site_maps(unseen_site_map)
 
     logging.info(f"Completed get_site_map for {url} at depth {current_depth} "
