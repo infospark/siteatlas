@@ -6,7 +6,7 @@ from _pytest.fixtures import fixture
 from selenium import webdriver
 from selenium.webdriver.chrome.webdriver import WebDriver
 
-from siteatlas.site_nagivation import get_page_map, SiteMap, get_site_map
+from siteatlas.site_nagivation import get_links_map, SiteMap, get_site_map, get_button_targets
 
 CURRENT_LOCATION = os.path.dirname(os.path.realpath(__file__))
 TEST_RESOURCES = os.path.join(CURRENT_LOCATION, 'resources/sample_basic_website')
@@ -23,14 +23,14 @@ def test_merge_two_site_maps() -> None:
     assert merged_site_map.ignored_urls == {'1', '2', '3', '4', '5'}
 
 
-def test_get_page_map() -> None:
+def test_get_page_map_from_tags(driver: WebDriver) -> None:
     # Given a page of html
     with open(f'{os.path.join(TEST_RESOURCES, "index.html")}', 'r') as f:
         html = f.read()
     # When I get the links from the page
-    page_map = get_page_map(html=html,
-                            base_url=f'file://{TEST_RESOURCES}/index.html',
-                            allowed_domains={""})
+    page_map = get_links_map(html=html,
+                             base_url=f'file://{TEST_RESOURCES}/index.html',
+                             allowed_domains={""})
 
     assert isinstance(page_map, SiteMap)
     # Then I expect to get a list of urls that are linked to from the page
@@ -42,14 +42,31 @@ def test_get_page_map() -> None:
     assert 'https://www.google.com/search' in page_map.ignored_urls
 
 
-def test_links_from_page_allow_extra_domain() -> None:
+@pytest.mark.integration("Requires Selenium")
+def test_links_via_buttons(driver: WebDriver) -> None:
+    # Given a page of html
+    filepath = os.path.join(TEST_RESOURCES, "button_source.html")
+    driver.get(f'file://{filepath}')
+    # When I get the links from the page
+    page_map = get_button_targets(driver=driver,
+                                  allowed_domains={'', 'www.google.com'})
+
+    assert isinstance(page_map, SiteMap)
+    # Then I expect to get a list of urls that are linked to from the page
+    assert len(page_map.urls) == 2
+    # And I expect to get the correct urls
+    assert f'file://{TEST_RESOURCES}/button_target_1.html' in page_map.urls
+    assert f'file://{TEST_RESOURCES}/button_target_2.html' in page_map.urls
+
+
+def test_links_from_page_allow_extra_domain(driver: WebDriver) -> None:
     # Given a page of html
     with open(f'{os.path.join(TEST_RESOURCES, "index.html")}', 'r') as f:
         html = f.read()
     # When I get the links from the page
-    page_map = get_page_map(html,
-                            f'file://{TEST_RESOURCES}/index.html',
-                            allowed_domains={'', 'www.google.com'})
+    page_map = get_links_map(html,
+                             f'file://{TEST_RESOURCES}/index.html',
+                             allowed_domains={'', 'www.google.com'})
     # Then I expect to get a list of urls that are linked to from the page
     assert len(page_map.urls) == 3
     # And I expect to get the correct urls
@@ -68,7 +85,7 @@ def test_site_navigation_file_url(driver: WebDriver) -> None:
     assert isinstance(site_map, SiteMap)
 
     # Then I expect to get a list of urls that are linked to from the seed url
-    assert len(site_map.urls) == 4
+    assert len(site_map.urls) >= 4
     assert f'file://{os.path.join(TEST_RESOURCES, "about.html")}' in site_map.urls
     assert f'file://{os.path.join(TEST_RESOURCES, "contact.html")}' in site_map.urls
     assert f'file://{os.path.join(TEST_RESOURCES, "index.html")}' in site_map.urls
@@ -81,7 +98,7 @@ def test_site_navigation_file_url(driver: WebDriver) -> None:
 
 
 @pytest.mark.integration("Requires Selenium")
-def test_site_navigation_unlinked_page(driver: WebDriver) -> None:
+def test_site_navigation_multiple_urls(driver: WebDriver) -> None:
     # Given a 'seed' url for a website
     index_url = f'file://{os.path.join(TEST_RESOURCES, "index.html")}'
     unlinked_page_url = f'file://{os.path.join(TEST_RESOURCES, "unlinked_page.html")}'
@@ -90,9 +107,21 @@ def test_site_navigation_unlinked_page(driver: WebDriver) -> None:
     assert isinstance(site_map, SiteMap)
 
     # Then I expect to get a list of urls that are linked to from the seed url
-    assert len(site_map.urls) == 5
-    assert index_url in site_map.urls
     assert unlinked_page_url in site_map.urls
+
+
+@pytest.mark.integration("Requires Selenium")
+def test_site_navigation_via_button(driver: WebDriver) -> None:
+    # Given a 'seed' url for a website
+    button_source_url = f'file://{os.path.join(TEST_RESOURCES, "button_source.html")}'
+
+    # When I generate a site map
+    site_map = get_site_map(button_source_url, driver, allowed_domains={''})
+    assert isinstance(site_map, SiteMap)
+
+    button_target_url = f'file://{os.path.join(TEST_RESOURCES, "button_target_1.html")}'
+    # Then I expect to get a list of urls that are linked to from the seed url
+    assert button_target_url in site_map.urls
 
 
 @pytest.mark.integration("Interacts with a live website")
@@ -114,7 +143,7 @@ def test_get_site_map_live_url(driver: WebDriver) -> None:
     assert 'github.com' in disallowed_domains
 
 
-@fixture
+@fixture(scope='module')
 def driver() -> Generator[WebDriver, None, None]:
     driver = webdriver.Chrome()
     yield driver

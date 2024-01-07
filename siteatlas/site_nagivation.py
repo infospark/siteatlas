@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import time
 from dataclasses import dataclass, field
@@ -5,6 +6,7 @@ from typing import Optional, Union, List
 
 from bs4 import BeautifulSoup
 from selenium.webdriver.chrome.webdriver import WebDriver
+from selenium.webdriver.common.by import By
 
 from siteatlas.url_functions import get_fully_qualified_domain_name, get_absolute_url
 
@@ -28,9 +30,60 @@ class SiteMap:
         return SiteMap(combined_urls, combined_ignored_urls)
 
 
-def get_page_map(html: str,
-                 base_url: str,
-                 allowed_domains: set[str]) -> SiteMap:
+def get_element_hash(driver: WebDriver, element):  # type: ignore
+    inner_html = driver.execute_script("return arguments[0].outerHTML;", element)  # type: ignore
+    return hashlib.md5(inner_html.encode()).hexdigest()
+
+
+def get_button_targets(driver: WebDriver,
+                       allowed_domains: set[str]) -> SiteMap:
+    # Attempt to find all buttons on the page
+    button_urls = set()
+    base_url = driver.current_url
+
+    buttons_seen = []
+    # find the next unseen button
+
+    more_buttons = True
+    while more_buttons:
+        all_buttons = driver.find_elements(By.TAG_NAME, 'button')
+        next_button = [button for button in all_buttons if get_element_hash(driver, button) not in buttons_seen]
+        if next_button:
+            button = next_button[0]
+            try:
+                # scroll the button into view
+                buttons_seen.append(get_element_hash(driver, button))
+                driver.execute_script("arguments[0].scrollIntoView();", button)  # type: ignore
+                # click the button via execute script
+                # JavaScript to create and dispatch the event
+                mousedown_script = """
+                var targetElement = arguments[0];
+                var mouseDownEvent = document.createEvent('MouseEvents');
+                mouseDownEvent.initMouseEvent(
+                    'mousedown', true, true, window, 0, 0, 0, 0, 0, 
+                    false, false, false, false, 0, null
+                );
+                targetElement.dispatchEvent(mouseDownEvent);
+                """
+                # Execute the script
+                driver.execute_script(mousedown_script, button)  # type: ignore
+                time.sleep(0.25)
+                if driver.current_url != base_url:
+                    button_urls.add(driver.current_url)
+                    driver.get(base_url)
+            except Exception as e:
+                logging.info(f"Could not click on button got {e}")
+        else:
+            more_buttons = False
+
+    urls = {url for url in button_urls if get_fully_qualified_domain_name(url) in allowed_domains}
+    # Return the buttons as a list of urls
+    return SiteMap(set(urls), set())
+
+
+def get_links_map(html: str,
+                  base_url: str,
+                  allowed_domains: set[str]) -> SiteMap:
     """Get a links from a single page."""
     # Create a BeautifulSoup object from the html
     page_soup = BeautifulSoup(html, 'html.parser')
@@ -105,13 +158,18 @@ def get_site_map_recursive(url: str,
     site_map.urls.add(url)
 
     # Get any new links from the page
-    page_map = get_page_map(html, url, allowed_domains)
+    links_map = get_links_map(html, url, allowed_domains)
+
+    # Get any new links via buttons
+    buttons_map = get_button_targets(driver, allowed_domains)
+
+    new_map = buttons_map + links_map
 
     # Get any new (unseen) urls for recursion
-    unseen_site_map = page_map.diff_site_maps(site_map)
+    unseen_site_map = new_map.diff_site_maps(site_map)
 
     # Add new links to all_links
-    site_map = site_map + page_map
+    site_map = site_map + new_map
 
     # Recursively call get_site_map for each new link
     for unseen_url in unseen_site_map.urls:
