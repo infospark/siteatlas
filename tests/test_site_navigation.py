@@ -17,7 +17,7 @@ def test_merge_two_site_maps() -> None:
     site_map_1 = SiteMap({'a', 'b', 'c'}, {'1', '2', '3'})
     site_map_2 = SiteMap({'c', 'd', 'e'}, {'3', '4', '5'})
     # When I merge them
-    merged_site_map = site_map_1.combine_site_maps(site_map_2)
+    merged_site_map = site_map_1 + site_map_2
     # Then I expect to get a new site map with all the urls from both site maps
     assert merged_site_map.urls == {'a', 'b', 'c', 'd', 'e'}
     assert merged_site_map.ignored_urls == {'1', '2', '3', '4', '5'}
@@ -78,6 +78,21 @@ def test_site_navigation_file_url(driver: WebDriver) -> None:
 
     # Ensure that the Google URL IS in the disallowed urls
     assert 'https://www.google.com/search' in site_map.ignored_urls
+
+
+@pytest.mark.integration("Requires Selenium")
+def test_site_navigation_unlinked_page(driver: WebDriver) -> None:
+    # Given a 'seed' url for a website
+    index_url = f'file://{os.path.join(TEST_RESOURCES, "index.html")}'
+    unlinked_page_url = f'file://{os.path.join(TEST_RESOURCES, "unlinked_page.html")}'
+    # When I generate a site map
+    site_map = get_site_map([index_url, unlinked_page_url], driver, allowed_domains={''})
+    assert isinstance(site_map, SiteMap)
+
+    # Then I expect to get a list of urls that are linked to from the seed url
+    assert len(site_map.urls) == 5
+    assert index_url in site_map.urls
+    assert unlinked_page_url in site_map.urls
 
 
 @pytest.mark.integration("Interacts with a live website")

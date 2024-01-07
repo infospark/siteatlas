@@ -1,7 +1,7 @@
 import logging
-from dataclasses import dataclass, field
 import time
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, Union, List
 
 from bs4 import BeautifulSoup
 from selenium.webdriver.chrome.webdriver import WebDriver
@@ -14,11 +14,6 @@ class SiteMap:
     urls: set[str] = field(default_factory=set)
     ignored_urls: set[str] = field(default_factory=set)
 
-    def combine_site_maps(self, other: 'SiteMap') -> 'SiteMap':
-        combined_urls = self.urls.union(other.urls)
-        combined_ignored_urls = self.ignored_urls.union(other.ignored_urls)
-        return SiteMap(combined_urls, combined_ignored_urls)
-
     def diff_site_maps(self, other: 'SiteMap') -> 'SiteMap':
         urls_diff = self.urls = self.urls.difference(other.urls)
         ignored_urls_diff = self.ignored_urls.difference(other.ignored_urls)
@@ -26,6 +21,11 @@ class SiteMap:
 
     def get_ignored_url_domains(self) -> set[str]:
         return {get_fully_qualified_domain_name(url) for url in self.ignored_urls}
+
+    def __add__(self, other: 'SiteMap') -> 'SiteMap':
+        combined_urls = self.urls.union(other.urls)
+        combined_ignored_urls = self.ignored_urls.union(other.ignored_urls)
+        return SiteMap(combined_urls, combined_ignored_urls)
 
 
 def get_page_map(html: str,
@@ -51,7 +51,7 @@ def get_page_map(html: str,
     return SiteMap(urls, ignored_urls)
 
 
-def get_site_map(url: str,
+def get_site_map(url: Union[str, List[str]],
                  driver: WebDriver,
                  site_map: SiteMap = SiteMap(),
                  current_depth: int = 0,
@@ -59,20 +59,29 @@ def get_site_map(url: str,
                  allowed_domains: Optional[set[str]] = None,
                  wait_in_seconds: float = 0.1) -> SiteMap:
     """Map a whole site."""
-    # If allowed_domains does not include the current domains then add it
+    if not isinstance(url, list):
+        url = [url]
+
     if not allowed_domains:
-        allowed_domains = {get_fully_qualified_domain_name(url)}
-    elif get_fully_qualified_domain_name(url) not in allowed_domains:
-        allowed_domains.add(get_fully_qualified_domain_name(url))
+        allowed_domains = set()
 
+    result = SiteMap()
 
-    return get_site_map_recursive(url=url,
-                                  driver=driver,
-                                  site_map=site_map,
-                                  allowed_domains=allowed_domains,
-                                  current_depth=current_depth,
-                                  max_depth=max_depth,
-                                  wait_in_seconds=wait_in_seconds)
+    for single_url in url:
+        # If allowed_domains does not include the current domains then add it
+        if get_fully_qualified_domain_name(single_url) not in allowed_domains:
+            allowed_domains.add(get_fully_qualified_domain_name(single_url))
+
+        site_map = get_site_map_recursive(url=single_url,
+                                          driver=driver,
+                                          site_map=site_map,
+                                          allowed_domains=allowed_domains,
+                                          current_depth=current_depth,
+                                          max_depth=max_depth,
+                                          wait_in_seconds=wait_in_seconds)
+        result = result + site_map
+
+    return result
 
 
 def get_site_map_recursive(url: str,
@@ -102,7 +111,7 @@ def get_site_map_recursive(url: str,
     unseen_site_map = page_map.diff_site_maps(site_map)
 
     # Add new links to all_links
-    site_map = site_map.combine_site_maps(page_map)
+    site_map = site_map + page_map
 
     # Recursively call get_site_map for each new link
     for unseen_url in unseen_site_map.urls:
@@ -113,7 +122,7 @@ def get_site_map_recursive(url: str,
                                                  max_depth=max_depth,
                                                  allowed_domains=allowed_domains,
                                                  wait_in_seconds=wait_in_seconds)
-        site_map = site_map.combine_site_maps(unseen_site_map)
+        site_map = site_map + unseen_site_map
 
     logging.info(f"Completed get_site_map for {url} at depth {current_depth} "
                  f"with {len(site_map.urls)} allowed urls "
