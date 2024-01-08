@@ -59,6 +59,7 @@ def test_links_via_buttons(driver: WebDriver) -> None:
     assert f'file://{TEST_RESOURCES}/button_target_2.html' in page_map.urls
 
 
+@pytest.mark.integration("Requires Selenium")
 def test_links_from_page_allow_extra_domain(driver: WebDriver) -> None:
     # Given a page of html
     with open(f'{os.path.join(TEST_RESOURCES, "index.html")}', 'r') as f:
