@@ -23,6 +23,7 @@ def test_merge_two_site_maps() -> None:
     assert merged_site_map.ignored_urls == {'1', '2', '3', '4', '5'}
 
 
+@pytest.mark.integration("Requires Selenium")
 def test_get_page_map_from_tags(driver: WebDriver) -> None:
     # Given a page of html
     with open(f'{os.path.join(TEST_RESOURCES, "index.html")}', 'r') as f:
